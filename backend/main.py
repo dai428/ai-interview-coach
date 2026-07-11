@@ -206,6 +206,14 @@ async def report(session_id: str = Query(...)):
 FRONTEND = os.path.abspath(os.path.join(os.path.dirname(__file__), "../frontend"))
 if os.path.isdir(FRONTEND): app.mount("/", StaticFiles(directory=FRONTEND, html=True), name="frontend")
 
+@app.middleware("http")
+async def add_no_cache_header(request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", "8008"))

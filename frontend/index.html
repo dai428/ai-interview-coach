@@ -464,7 +464,10 @@ async function genResume() {
         fd.append("notes", document.getElementById("proNotes").value.trim());
 
         const res = await fetch(API + "/api/generate-resume", { method: "POST", body: fd });
-        const d = await res.json();
+        const raw = await res.text();
+        console.log("Raw response:", raw.substring(0, 200));
+        let d;
+        try { d = JSON.parse(raw); } catch (pe) { throw new Error("JSON解析失败: " + pe.message); }
         if (d.error) return alert(d.error);
 
         genResumeText = d.resume || "";
@@ -507,7 +510,8 @@ async function genResume() {
         `;
         document.getElementById("genResumeResult").scrollIntoView({ behavior: "smooth" });
     } catch (e) {
-        alert("生成失败: " + e.message);
+        console.error("genResume error:", e);
+        alert("生成失败: " + (e.message || JSON.stringify(e)));
     } finally {
         btn.disabled = false; btn.innerHTML = "🤖 AI 生成简历";
     }

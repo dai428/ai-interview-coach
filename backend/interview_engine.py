@@ -1,15 +1,24 @@
 """面试引擎"""
 import json, re, uuid
 from openai import OpenAI
+from fastapi import HTTPException
 import config
 
 client = OpenAI(api_key=config.DEEPSEEK_API_KEY, base_url=config.DEEPSEEK_API_BASE)
 sessions = {}
 
 def _llm_json(sp, up):
-    r = client.chat.completions.create(model=config.LLM_MODEL, messages=[{"role":"system","content":sp},{"role":"user","content":up}], temperature=0.4, response_format={"type":"json_object"})
-    t = re.sub(r'^```(?:json)?\s*|\s*```$', '', r.choices[0].message.content.strip())
-    return json.loads(t)
+    try:
+        r = client.chat.completions.create(model=config.LLM_MODEL, messages=[{"role":"system","content":sp},{"role":"user","content":up}], temperature=0.4, response_format={"type":"json_object"})
+        t = re.sub(r'^```(?:json)?\s*|\s*```$', '', r.choices[0].message.content.strip())
+        return json.loads(t)
+    except json.JSONDecodeError as e:
+        print(f"JSON parse error: {e}")
+        print(f"Raw content: {r.choices[0].message.content[:500]}")
+        raise HTTPException(500, "AI 返回格式异常，请重试")
+    except Exception as e:
+        print(f"LLM error: {e}")
+        raise HTTPException(500, f"AI 服务异常: {str(e)}")
 
 Q_PROMPT = """你是一位经验丰富的面试官，说话亲切自然，喜欢用"咱们"、"比如说"、"你觉得呢"这类口语化表达。你的任务是：
 1. 先热情地打招呼，简单介绍自己，让候选人放松下来
@@ -47,15 +56,46 @@ R_PROMPT = """你刚刚完成了一场模拟面试，现在要给候选人一个
 
 GEN_RESUME_PROMPT = """你是一位资深的职业规划师和简历专家，说话亲切、专业、接地气。根据招聘JD和候选人提供的信息，请你帮候选人做三件事：
 
-1. 生成一份与JD匹配的真实可信的简历。如果候选人提供了个人信息，基于这些信息来写；如果某部分信息为空，你根据JD要求自动生成最优的、真实可信的内容。简历要包含：姓名和联系方式、个人优势（2-3句）、技能清单、工作/项目经历（2-3段）、教育背景
+1. 生成一份与JD匹配的真实可信的简历。如果候选人提供了个人信息，基于这些信息来写；如果某部分信息为空，你根据JD要求自动生成最优的、真实可信的内容。
 2. 分析该岗位需要掌握的核心技术栈，并标注每个技术的掌握程度建议
 3. 为候选人规划一条学习路径，推荐具体的学习资源
 
+===== 简历书写规范（严格遵循）=====
+
+【整体原则】
+- 一页A4纸，简洁明了，不要花里胡哨
+- 简历上写的每一项都会成为面试考点，拿不准的绝对不要写，不熟的技能不要写
+- 突出3-5个核心技能点，不要面面俱到。面试官重点考察你写出来的技能
+- 技术名词大小写严格规范：如 MySQL 不是 mysql，Java 不是 java，Redis 不是 redis
+
+【简历结构】
+1. 个人信息：姓名、电话、邮箱、求职意向（一行即可，简洁）
+2. 个人优势：2-3句话，突出核心竞争力和经验亮点
+3. 技能清单：分门别类，每类只列真正掌握的
+   - 编程语言：Java、Python 等
+   - 框架：Spring Boot、MyBatis 等
+   - 数据库与中间件：MySQL、Redis、Kafka 等
+   - 工具与其他：Git、Docker、Linux 等
+4. 工作/项目经历：每段经历包含：
+   - 项目名称/公司 · 时间
+   - 项目描述：一句话说清楚项目做什么
+   - 技术栈：用了什么技术
+   - 个人职责：做了什么、解决了什么问题、有什么成果（尽量量化）
+   - 用 STAR 法则（情境-任务-行动-结果）描述，突出个人贡献
+5. 教育背景：学校、学历、专业、时间（简洁）
+
+【排版规范】
+- 中英文之间加空格，如："使用 Java 开发"
+- 中文和数字之间加空格，如："3 年经验"
+- 不要使用表格、复杂配色、图片
+- 简历整体风格简洁专业，像高质量 Markdown 渲染效果
+
+===== 输出格式 =====
 输出JSON格式：
 {
-    "resume": "完整的简历内容，用自然的文字描述，每部分用中文标题标注（如【基本信息】【个人优势】【技能清单】【工作经历】【项目经验】【教育背景】），不要用markdown表格",
+    "resume": "完整的简历内容，严格按上述规范书写，每部分用【】中文标题标注，不要用markdown表格，语言精炼",
     "tech_stack": [
-        {"name": "技术名称", "level": "掌握程度建议（如：精通/熟练/了解）", "why": "为什么这个岗位需要这个技术"}
+        {"name": "技术名称", "level": "掌握程度（精通/熟练/了解）", "why": "为什么这个岗位需要这个技术"}
     ],
     "learning_path": [
         {"topic": "学习主题", "resources": "推荐的具体学习资源（书名/网站/课程名）", "why": "为什么要学这个", "time_estimate": "预计学习时间"}
@@ -64,10 +104,11 @@ GEN_RESUME_PROMPT = """你是一位资深的职业规划师和简历专家，说
     "match_analysis": "候选人匹配度分析，指出哪些JD要求可以满足，哪些还需要补强"
 }
 
-注意：
+===== 注意事项 =====
 - 如果候选人提供了姓名，使用真实姓名；否则生成一个合理的名字
-- 简历必须精炼，控制在A4纸一页以内，不要写太多废话
-- 不要编造过于离谱的经历
+- 简历必须精炼，控制在A4纸一页以内
+- 不熟的技能宁可少写，不要多写。面试官会追着你写的每一项技能提问
+- 项目经历要有具体细节，不要泛泛而谈"参与了XX系统开发"
 - 学习路径要具体可执行，不要泛泛而谈
 - 整体语气要温暖鼓励，像是在帮朋友准备面试"""
 
