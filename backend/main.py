@@ -6,7 +6,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import config
-from interview_engine import new_id, analyze, score_answer, get_questions, get_answers, get_report
+from interview_engine import new_id, analyze, score_answer, get_questions, get_answers, get_report, generate_resume_and_tech
 
 UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/uploads"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -42,10 +42,10 @@ def extract_text_from_pdf(file_path):
 
 def extract_text_from_image(file_path):
     try:
-        from PIL import Image
-        import pytesseract
-        img = Image.open(file_path)
-        return pytesseract.image_to_string(img, lang='chi_sim')
+        import easyocr
+        reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
+        result = reader.readtext(file_path, detail=0)
+        return "\n".join(result)
     except Exception as e:
         print(f"Error reading image: {e}")
         return ""
@@ -78,37 +78,110 @@ def process_jd_image(file: UploadFile) -> str:
     os.remove(file_path)
     return text
 
+def build_jd_content(jd_text: str, jd_images: list) -> str:
+    parts = []
+    if jd_text.strip():
+        parts.append(jd_text.strip())
+    for img in (jd_images or []):
+        if img.filename:
+            content = process_jd_image(img)
+            if content.strip():
+                parts.append(content)
+    return "\n\n".join(parts)
+
 @app.post("/api/start")
 async def start(
-    jd_type: str = Form(...),
     jd_text: str = Form(""),
-    jd_image: UploadFile = File(None),
-    resume_file: UploadFile = File(None)
+    jd_images: list[UploadFile] = File(None),
+    resume_file: UploadFile = File(None),
+    resume_text: str = Form("")
 ):
-    # 处理JD
-    jd_content = ""
-    if jd_type == "text":
-        if not jd_text.strip():
-            raise HTTPException(400, "JD文字描述不能为空")
-        jd_content = jd_text.strip()
-    elif jd_type == "image":
-        if not jd_image:
-            raise HTTPException(400, "请上传JD截图")
-        jd_content = process_jd_image(jd_image)
-        if not jd_content.strip():
-            raise HTTPException(400, "无法从截图中提取文字，请尝试文字输入")
+    jd_content = build_jd_content(jd_text, jd_images or [])
+    if not jd_content.strip():
+        raise HTTPException(400, "请填写JD文字描述或粘贴截图")
+    if len(jd_content) > config.MAX_JD_LENGTH:
+        jd_content = jd_content[:config.MAX_JD_LENGTH]
+    
+    resume_content = ""
+    if resume_file:
+        resume_content = process_resume_file(resume_file)
+        if not resume_content.strip():
+            raise HTTPException(400, "无法从简历文件中提取文字，请检查文件格式")
+    elif resume_text.strip():
+        resume_content = resume_text.strip()
     else:
-        raise HTTPException(400, "无效的JD类型")
-    
-    # 处理简历
-    if not resume_file:
-        raise HTTPException(400, "请上传简历文件")
-    
-    resume_content = process_resume_file(resume_file)
-    if not resume_content.strip():
-        raise HTTPException(400, "无法从简历文件中提取文字，请检查文件格式")
+        raise HTTPException(400, "请上传简历文件或使用AI生成简历")
     
     return analyze(new_id(), jd_content, resume_content)
+
+@app.post("/api/generate-resume")
+async def generate_resume(
+    jd_text: str = Form(""),
+    jd_images: list[UploadFile] = File(None),
+    name: str = Form(""),
+    skills: str = Form(""),
+    experience: str = Form(""),
+    position: str = Form(""),
+    education: str = Form(""),
+    notes: str = Form("")
+):
+    jd_content = build_jd_content(jd_text, jd_images or [])
+    if not jd_content.strip():
+        raise HTTPException(400, "请填写JD文字描述或粘贴截图")
+    if len(jd_content) > config.MAX_JD_LENGTH:
+        jd_content = jd_content[:config.MAX_JD_LENGTH]
+    
+    profile = {
+        "name": name.strip(),
+        "skills": skills.strip(),
+        "experience": experience.strip(),
+        "position": position.strip(),
+        "education": education.strip(),
+        "notes": notes.strip()
+    }
+    return generate_resume_and_tech(jd_content, profile)
+
+@app.post("/api/download-resume")
+async def download_resume(resume_text: str = Form(...)):
+    from fpdf import FPDF
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+    
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.add_font("SimSun", "", "C:/Windows/Fonts/simsun.ttc", uni=True)
+    pdf.set_font("SimSun", "", 10)
+    pdf.set_auto_page_break(False)
+    
+    y = 15
+    for line in resume_text.split("\n"):
+        line = line.strip()
+        if not line:
+            y += 4
+            continue
+        if line.startswith("【") and "】" in line:
+            pdf.set_font("SimSun", "", 12)
+            pdf.set_xy(15, y)
+            pdf.cell(0, 7, line, new_x="LMARGIN", new_y="NEXT")
+            y = pdf.get_y() + 2
+            pdf.set_font("SimSun", "", 10)
+        else:
+            pdf.set_xy(15, y)
+            pdf.multi_cell(180, 5, line)
+            y = pdf.get_y() + 1
+        
+        if y > 280:
+            break
+    
+    buf = BytesIO()
+    pdf.output(buf)
+    buf.seek(0)
+    
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=resume.pdf"}
+    )
 
 @app.get("/api/question")
 async def question(session_id: str = Query(...), question_id: int = Query(None)):

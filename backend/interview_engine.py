@@ -45,6 +45,51 @@ R_PROMPT = """你刚刚完成了一场模拟面试，现在要给候选人一个
 
 整体语气要像一个关心你的前辈在给你复盘，不要说官话套话。"""
 
+GEN_RESUME_PROMPT = """你是一位资深的职业规划师和简历专家，说话亲切、专业、接地气。根据招聘JD和候选人提供的信息，请你帮候选人做三件事：
+
+1. 生成一份与JD匹配的真实可信的简历。如果候选人提供了个人信息，基于这些信息来写；如果某部分信息为空，你根据JD要求自动生成最优的、真实可信的内容。简历要包含：姓名和联系方式、个人优势（2-3句）、技能清单、工作/项目经历（2-3段）、教育背景
+2. 分析该岗位需要掌握的核心技术栈，并标注每个技术的掌握程度建议
+3. 为候选人规划一条学习路径，推荐具体的学习资源
+
+输出JSON格式：
+{
+    "resume": "完整的简历内容，用自然的文字描述，每部分用中文标题标注（如【基本信息】【个人优势】【技能清单】【工作经历】【项目经验】【教育背景】），不要用markdown表格",
+    "tech_stack": [
+        {"name": "技术名称", "level": "掌握程度建议（如：精通/熟练/了解）", "why": "为什么这个岗位需要这个技术"}
+    ],
+    "learning_path": [
+        {"topic": "学习主题", "resources": "推荐的具体学习资源（书名/网站/课程名）", "why": "为什么要学这个", "time_estimate": "预计学习时间"}
+    ],
+    "interview_tips": "针对该岗位的3-5条面试小贴士，语气要像朋友在分享经验",
+    "match_analysis": "候选人匹配度分析，指出哪些JD要求可以满足，哪些还需要补强"
+}
+
+注意：
+- 如果候选人提供了姓名，使用真实姓名；否则生成一个合理的名字
+- 简历必须精炼，控制在A4纸一页以内，不要写太多废话
+- 不要编造过于离谱的经历
+- 学习路径要具体可执行，不要泛泛而谈
+- 整体语气要温暖鼓励，像是在帮朋友准备面试"""
+
+def generate_resume_and_tech(jd_content, profile=None):
+    profile = profile or {}
+    profile_text = ""
+    if profile.get("name"): profile_text += f"姓名：{profile['name']}\n"
+    if profile.get("skills"): profile_text += f"已有技能：{profile['skills']}\n"
+    if profile.get("experience"): profile_text += f"工作经验：{profile['experience']}\n"
+    if profile.get("position"): profile_text += f"目标岗位：{profile['position']}\n"
+    if profile.get("education"): profile_text += f"教育背景：{profile['education']}\n"
+    if profile.get("notes"): profile_text += f"补充说明：{profile['notes']}\n"
+
+    user_msg = f"## 招聘JD\n{jd_content}\n\n"
+    if profile_text:
+        user_msg += f"## 候选人提供的信息\n{profile_text}\n\n请基于候选人提供的信息，对缺失的部分自动补全，生成一份完整的简历。"
+    else:
+        user_msg += "候选人没有提供任何个人信息，请根据JD自动生成一份最优的、真实可信的简历。"
+
+    result = _llm_json(GEN_RESUME_PROMPT, user_msg)
+    return result
+
 def new_id():
     return uuid.uuid4().hex[:12]
 

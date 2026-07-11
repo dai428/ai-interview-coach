@@ -196,12 +196,6 @@
         }
         .home-card textarea:focus { border-color: #1890ff; }
         .home-card textarea::placeholder { color: #bbb; }
-        .mode-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
-        .mode-tab {
-            padding: 5px 14px; border-radius: 14px; font-size: 13px;
-            cursor: pointer; background: #f5f5f5; color: #666; transition: all 0.3s;
-        }
-        .mode-tab.active { background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%); color: #fff; }
         .upload-area {
             border: 2px dashed #e0e0e0; border-radius: 8px; padding: 24px;
             text-align: center; cursor: pointer; transition: all 0.3s; background: #fafafa;
@@ -218,7 +212,6 @@
         .file-row .name { flex: 1; font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .file-row .size { font-size: 12px; color: #999; margin: 0 8px; }
         .file-row .del { color: #ff4d4f; cursor: pointer; font-size: 16px; }
-        .preview-img { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px; }
         .start-btn {
             width: 100%; padding: 12px; border: none; border-radius: 10px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -241,6 +234,43 @@
         .report-card h4 { font-size: 14px; color: #333; margin-bottom: 8px; }
         .report-card ul { padding-left: 18px; }
         .report-card li { font-size: 13px; color: #555; margin-bottom: 4px; line-height: 1.6; }
+
+        /* 无简历模式 */
+        .no-resume-toggle {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 12px; cursor: pointer;
+            font-size: 14px; color: #666; user-select: none;
+        }
+        .no-resume-toggle input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #667eea; }
+        .gen-resume-card {
+            background: #fff; border-radius: 12px; padding: 18px; margin-bottom: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06); width: 100%; max-width: 500px;
+        }
+        .gen-resume-card h3 { font-size: 15px; color: #333; margin-bottom: 10px; }
+        .gen-resume-card .resume-text {
+            background: #f9fafb; border-radius: 8px; padding: 14px; font-size: 13px;
+            line-height: 1.8; color: #444; max-height: 300px; overflow-y: auto; white-space: pre-wrap;
+        }
+        .tech-tag {
+            display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px;
+            margin: 3px 4px; background: #e6f7ff; color: #1890ff;
+        }
+        .tech-tag.master { background: #f6ffed; color: #52c41a; }
+        .tech-tag.skilled { background: #e6f7ff; color: #1890ff; }
+        .tech-tag.basic { background: #fffbe6; color: #faad14; }
+        .learning-item {
+            padding: 10px 12px; background: #fafafa; border-radius: 8px; margin-bottom: 8px;
+            border-left: 3px solid #667eea;
+        }
+        .learning-item .topic { font-size: 14px; font-weight: 600; color: #333; }
+        .learning-item .meta { font-size: 12px; color: #999; margin-top: 4px; }
+        .learning-item .why { font-size: 13px; color: #666; margin-top: 4px; }
+        .tips-box {
+            background: linear-gradient(135deg, #fffbe6 0%, #fff7e6 100%);
+            border-radius: 8px; padding: 12px; font-size: 13px; color: #8c6d00; line-height: 1.7;
+        }
+        .match-box {
+            background: #f0f5ff; border-radius: 8px; padding: 12px; font-size: 13px; color: #1a3a6b; line-height: 1.7;
+        }
     </style>
 </head>
 <body>
@@ -253,40 +283,41 @@
 
     <div class="home-card">
         <h3>JD 描述</h3>
-        <div class="mode-tabs">
-            <div class="mode-tab active" onclick="switchJDMode('text')">文字输入</div>
-            <div class="mode-tab" onclick="switchJDMode('image')">截图上传</div>
-        </div>
-        <div id="jdTextMode">
-            <textarea id="jd" rows="3" placeholder="粘贴职位描述..."></textarea>
-        </div>
-        <div id="jdImageMode" class="hidden">
-            <div class="upload-area" id="jdDropZone"
-                 onclick="document.getElementById('jdImageUpload').click()"
+        <textarea id="jd" rows="3" placeholder="粘贴职位描述，也可以直接 Ctrl+V 粘贴截图..."></textarea>
+        <div id="jdImagePreviews" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
+    </div>
+    <div class="home-card" id="resumeCard">
+        <h3>简历</h3>
+        <label class="no-resume-toggle">
+            <input type="checkbox" id="noResumeCheck" onchange="toggleNoResume()">
+            我没有简历，帮我根据 JD 自动生成
+        </label>
+        <div id="resumeUploadArea">
+            <div class="upload-area" id="resumeDropZone"
+                 onclick="document.getElementById('resumeUpload').click()"
                  ondragover="event.preventDefault();this.classList.add('dragover')"
                  ondragleave="this.classList.remove('dragover')"
-                 ondrop="event.preventDefault();this.classList.remove('dragover');handleJDImageDrop(event)">
-                <div class="icon">📷</div>
-                <div class="text">点击或拖拽上传 JD 截图</div>
-                <div class="hint">JPG / PNG / WebP</div>
+                 ondrop="event.preventDefault();this.classList.remove('dragover');handleResumeDrop(event)">
+                <div class="icon">📄</div>
+                <div class="text">点击或拖拽上传简历文件</div>
+                <div class="hint">DOCX / PDF，最大 10MB</div>
             </div>
-            <input type="file" id="jdImageUpload" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="handleJDImageSelect(this)">
-            <div id="jdImagePreview"></div>
+            <input type="file" id="resumeUpload" accept=".docx,.pdf" class="hidden" onchange="handleResumeSelect(this)">
+            <div id="resumeFileInfo"></div>
         </div>
-    </div>
-    <div class="home-card">
-        <h3>简历</h3>
-        <div class="upload-area" id="resumeDropZone"
-             onclick="document.getElementById('resumeUpload').click()"
-             ondragover="event.preventDefault();this.classList.add('dragover')"
-             ondragleave="this.classList.remove('dragover')"
-             ondrop="event.preventDefault();this.classList.remove('dragover');handleResumeDrop(event)">
-            <div class="icon">📄</div>
-            <div class="text">点击或拖拽上传简历文件</div>
-            <div class="hint">DOCX / PDF，最大 10MB</div>
+        <div id="genResumeArea" class="hidden">
+            <div style="font-size:13px;color:#888;margin-bottom:8px;">选填，留空则 AI 自动生成最优内容：</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                <input type="text" id="proName" placeholder="姓名（选填）" style="padding:8px 12px;border:1px solid #e8e8e8;border-radius:8px;font-size:14px;width:100%;box-sizing:border-box;">
+                <input type="text" id="proPosition" placeholder="目标岗位（选填）" style="padding:8px 12px;border:1px solid #e8e8e8;border-radius:8px;font-size:14px;width:100%;box-sizing:border-box;">
+            </div>
+            <input type="text" id="proSkills" placeholder="已有技能，逗号分隔（选填）" style="padding:8px 12px;border:1px solid #e8e8e8;border-radius:8px;font-size:14px;width:100%;box-sizing:border-box;margin-bottom:8px;">
+            <textarea id="proExperience" rows="2" placeholder="工作经验（选填，如：3年Java开发，做过电商项目...）" style="padding:8px 12px;border:1px solid #e8e8e8;border-radius:8px;font-size:14px;width:100%;box-sizing:border-box;resize:vertical;margin-bottom:8px;font-family:inherit;"></textarea>
+            <input type="text" id="proEducation" placeholder="教育背景（选填，如：本科/计算机科学）" style="padding:8px 12px;border:1px solid #e8e8e8;border-radius:8px;font-size:14px;width:100%;box-sizing:border-box;margin-bottom:8px;">
+            <textarea id="proNotes" rows="1" placeholder="补充说明（选填）" style="padding:8px 12px;border:1px solid #e8e8e8;border-radius:8px;font-size:14px;width:100%;box-sizing:border-box;resize:vertical;margin-bottom:10px;font-family:inherit;"></textarea>
+            <button class="start-btn" id="genResumeBtn" onclick="genResume()" style="background:linear-gradient(135deg, #52c41a 0%, #389e0d 100%);">🤖 AI 生成简历</button>
+            <div id="genResumeResult"></div>
         </div>
-        <input type="file" id="resumeUpload" accept=".docx,.pdf" class="hidden" onchange="handleResumeSelect(this)">
-        <div id="resumeFileInfo"></div>
     </div>
     <button class="start-btn" onclick="start()" id="startBtn">开始面试</button>
 </div>
@@ -330,14 +361,71 @@
 <script>
 const API = "";
 let sid = "", qs = [], idx = 0, totalQs = 0;
-let resumeFile = null, jdImageFile = null, jdMode = 'text';
+let resumeFile = null, jdImages = [], genResumeText = "";
 
-function switchJDMode(mode) {
-    jdMode = mode;
-    document.querySelectorAll('.mode-tab').forEach((t,i) => t.classList.toggle('active', i === (mode==='text'?0:1)));
-    document.getElementById('jdTextMode').classList.toggle('hidden', mode !== 'text');
-    document.getElementById('jdImageMode').classList.toggle('hidden', mode !== 'image');
+function toggleNoResume() {
+    const checked = document.getElementById("noResumeCheck").checked;
+    document.getElementById("resumeUploadArea").classList.toggle("hidden", checked);
+    document.getElementById("genResumeArea").classList.toggle("hidden", !checked);
+    if (checked) {
+        resumeFile = null;
+        document.getElementById("resumeFileInfo").innerHTML = "";
+        document.getElementById("resumeUpload").value = "";
+    } else {
+        genResumeText = "";
+        document.getElementById("genResumeResult").innerHTML = "";
+    }
 }
+
+function addJDImage(file) {
+    jdImages.push(file);
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const idx = jdImages.length - 1;
+        const div = document.createElement("div");
+        div.style.cssText = "position:relative;display:inline-block;";
+        div.innerHTML = `<img src="${e.target.result}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8;">
+            <span onclick="removeJDImage(${idx})" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;background:#ff4d4f;color:#fff;border-radius:50%;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;">×</span>`;
+        document.getElementById("jdImagePreviews").appendChild(div);
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeJDImage(idx) {
+    jdImages.splice(idx, 1);
+    renderJDPreviews();
+}
+
+function renderJDPreviews() {
+    const container = document.getElementById("jdImagePreviews");
+    container.innerHTML = "";
+    jdImages.forEach(function(file, idx) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const div = document.createElement("div");
+            div.style.cssText = "position:relative;display:inline-block;";
+            div.innerHTML = `<img src="${e.target.result}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8;">
+                <span onclick="removeJDImage(${idx})" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;background:#ff4d4f;color:#fff;border-radius:50%;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;">×</span>`;
+            container.appendChild(div);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+document.getElementById("jd").addEventListener("paste", function(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+        if (item.type.startsWith("image/")) {
+            e.preventDefault();
+            const blob = item.getAsFile();
+            const ext = item.type.split("/")[1] || "png";
+            const file = new File([blob], "clipboard." + ext, { type: item.type });
+            addJDImage(file);
+            return;
+        }
+    }
+});
 
 function handleResumeSelect(input) { const f = input.files[0]; if (f) validateResume(f); }
 function handleResumeDrop(event) { const f = event.dataTransfer.files[0]; if (f) validateResume(f); }
@@ -348,39 +436,114 @@ function validateResume(file) {
     resumeFile = file;
     document.getElementById('resumeFileInfo').innerHTML = `<div class="file-row"><span class="name">${file.name}</span><span class="size">${fmtSize(file.size)}</span><span class="del" onclick="resumeFile=null;document.getElementById('resumeFileInfo').innerHTML='';document.getElementById('resumeUpload').value='';">×</span></div>`;
 }
-function handleJDImageSelect(input) { const f = input.files[0]; if (f) validateJDImage(f); }
-function handleJDImageDrop(event) { const f = event.dataTransfer.files[0]; if (f) validateJDImage(f); }
-function validateJDImage(file) {
-    if (!['jpg','jpeg','png','webp'].includes(file.name.split('.').pop().toLowerCase())) return alert('请上传图片格式');
-    if (file.size > 5*1024*1024) return alert('图片不能超过 5MB');
-    jdImageFile = file;
-    const reader = new FileReader();
-    reader.onload = e => document.getElementById('jdImagePreview').innerHTML = `<img src="${e.target.result}" class="preview-img"><div class="file-row"><span class="name">${file.name}</span><span class="size">${fmtSize(file.size)}</span><span class="del" onclick="jdImageFile=null;document.getElementById('jdImagePreview').innerHTML='';document.getElementById('jdImageUpload').value='';">×</span></div>`;
-    reader.readAsDataURL(file);
-}
 function fmtSize(b) { return b<1024?b+'B':b<1048576?(b/1024).toFixed(1)+'KB':(b/1048576).toFixed(1)+'MB'; }
 
-async function start() {
-    let jdData, jdType;
-    if (jdMode === 'text') {
-        jdData = document.getElementById("jd").value.trim();
-        if (!jdData) return alert("请填写 JD 文字描述");
-        jdType = 'text';
-    } else {
-        if (!jdImageFile) return alert("请上传 JD 截图");
-        jdData = jdImageFile; jdType = 'image';
+function levelClass(level) {
+    const l = (level || "").toLowerCase();
+    if (l.includes("精通") || l.includes("master")) return "master";
+    if (l.includes("熟练") || l.includes("skilled")) return "skilled";
+    return "basic";
+}
+
+async function genResume() {
+    const jdText = document.getElementById("jd").value.trim();
+    if (!jdText && jdImages.length === 0) return alert("请填写 JD 文字描述或粘贴截图");
+
+    const btn = document.getElementById("genResumeBtn");
+    btn.disabled = true; btn.innerHTML = "⏳ 正在生成简历...";
+
+    try {
+        const fd = new FormData();
+        fd.append("jd_text", jdText);
+        jdImages.forEach(function(img) { fd.append("jd_images", img); });
+        fd.append("name", document.getElementById("proName").value.trim());
+        fd.append("skills", document.getElementById("proSkills").value.trim());
+        fd.append("experience", document.getElementById("proExperience").value.trim());
+        fd.append("position", document.getElementById("proPosition").value.trim());
+        fd.append("education", document.getElementById("proEducation").value.trim());
+        fd.append("notes", document.getElementById("proNotes").value.trim());
+
+        const res = await fetch(API + "/api/generate-resume", { method: "POST", body: fd });
+        const d = await res.json();
+        if (d.error) return alert(d.error);
+
+        genResumeText = d.resume || "";
+
+        const techTags = (d.tech_stack || []).map(t =>
+            `<span class="tech-tag ${levelClass(t.level)}" title="${t.why || ''}">${t.name} · ${t.level}</span>`
+        ).join("");
+
+        const learningItems = (d.learning_path || []).map(l =>
+            `<div class="learning-item">
+                <div class="topic">📖 ${l.topic}</div>
+                <div class="meta">⏱ ${l.time_estimate || '—'} ｜ 📚 ${l.resources || '—'}</div>
+                <div class="why">💡 ${l.why || ''}</div>
+            </div>`
+        ).join("");
+
+        document.getElementById("genResumeResult").innerHTML = `
+            <div class="gen-resume-card" style="margin-top:12px;">
+                <h3>📝 生成的简历</h3>
+                <div class="resume-text">${genResumeText.replace(/\n/g, '<br>')}</div>
+                <button class="start-btn" onclick="downloadResume()" style="margin-top:10px;background:linear-gradient(135deg, #722ed1 0%, #531dab 100%);">📥 下载简历（PDF）</button>
+            </div>
+            <div class="gen-resume-card">
+                <h3>🛠 技术栈要求</h3>
+                <div>${techTags}</div>
+            </div>
+            <div class="gen-resume-card">
+                <h3>📚 学习路线</h3>
+                ${learningItems}
+            </div>
+            ${d.interview_tips ? `<div class="gen-resume-card">
+                <h3>💬 面试小贴士</h3>
+                <div class="tips-box">${d.interview_tips.replace(/\n/g, '<br>')}</div>
+            </div>` : ''}
+            ${d.match_analysis ? `<div class="gen-resume-card">
+                <h3>🔍 匹配度分析</h3>
+                <div class="match-box">${d.match_analysis.replace(/\n/g, '<br>')}</div>
+            </div>` : ''}
+            <button class="start-btn" onclick="start()">✅ 确认简历，开始面试</button>
+        `;
+        document.getElementById("genResumeResult").scrollIntoView({ behavior: "smooth" });
+    } catch (e) {
+        alert("生成失败: " + e.message);
+    } finally {
+        btn.disabled = false; btn.innerHTML = "🤖 AI 生成简历";
     }
-    if (!resumeFile) return alert("请上传简历文件");
+}
+
+async function downloadResume() {
+    try {
+        const fd = new FormData();
+        fd.append("resume_text", genResumeText);
+        const res = await fetch(API + "/api/download-resume", { method: "POST", body: fd });
+        if (!res.ok) { alert("下载失败"); return; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "resume.pdf"; a.click();
+        URL.revokeObjectURL(url);
+    } catch (e) { alert("下载失败: " + e.message); }
+}
+
+async function start() {
+    const jdText = document.getElementById("jd").value.trim();
+    if (!jdText && jdImages.length === 0) return alert("请填写 JD 文字描述或粘贴截图");
+    if (!resumeFile && !genResumeText) return alert("请上传简历文件或使用 AI 生成简历");
 
     const btn = document.getElementById("startBtn");
     btn.disabled = true; btn.innerHTML = "正在分析简历...";
 
     try {
         const fd = new FormData();
-        fd.append('jd_type', jdType);
-        if (jdType === 'text') fd.append('jd_text', jdData);
-        else fd.append('jd_image', jdData);
-        fd.append('resume_file', resumeFile);
+        fd.append("jd_text", jdText);
+        jdImages.forEach(function(img) { fd.append("jd_images", img); });
+        if (resumeFile) {
+            fd.append("resume_file", resumeFile);
+        } else {
+            fd.append("resume_text", genResumeText);
+        }
 
         const res = await fetch(API + "/api/start", { method: "POST", body: fd });
         const d = await res.json();
@@ -555,20 +718,22 @@ async function finish() {
 
 function reset() {
     sid = ""; qs = []; idx = 0; totalQs = 0;
-    resumeFile = null; jdImageFile = null;
+    resumeFile = null; jdImages = []; genResumeText = "";
     document.getElementById("interviewPage").classList.add("hidden");
     document.getElementById("reportPage").classList.add("hidden");
     document.getElementById("homePage").classList.remove("hidden");
     document.getElementById("jd").value = "";
+    document.getElementById("jdImagePreviews").innerHTML = "";
     document.getElementById("resumeFileInfo").innerHTML = "";
-    document.getElementById("jdImagePreview").innerHTML = "";
+    document.getElementById("genResumeResult").innerHTML = "";
     document.getElementById("resumeUpload").value = "";
-    document.getElementById("jdImageUpload").value = "";
     document.getElementById("answerInput").value = "";
     document.getElementById("inputBar").classList.add("hidden");
     document.getElementById("actionBar").classList.add("hidden");
     document.getElementById("progress").textContent = "1/6";
-    if (jdMode !== 'text') switchJDMode('text');
+    document.getElementById("noResumeCheck").checked = false;
+    document.getElementById("resumeUploadArea").classList.remove("hidden");
+    document.getElementById("genResumeArea").classList.add("hidden");
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
